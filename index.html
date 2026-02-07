@@ -14,8 +14,9 @@ body {
   color: #444;
   text-align: center;
   padding: 20px;
+  overflow-x: hidden;
 }
-.container { max-width: 480px; margin: auto; }
+.container { max-width: 480px; margin: auto; position: relative; }
 h1 { color: #6a4bc3; }
 p { font-size: 16px; line-height: 1.5; }
 .hidden { display: none; }
@@ -33,7 +34,7 @@ button {
 .start { background: #6a4bc3; color: #fff; }
 .send { background: #2e7d32; color: #fff; }
 .retry { background: #e0e0e0; }
-.success { margin-top: 30px; font-size: 20px; color: #2e7d32; }
+.success { margin-top: 30px; font-size: 20px; color: #2e7d32; position: relative; z-index: 2; }
 .progress-bar {
   width: 100%;
   height: 16px;
@@ -41,14 +42,28 @@ button {
   border-radius: 8px;
   overflow: hidden;
   margin-top: 12px;
+  transition: opacity 0.3s;
+  opacity: 0;
 }
 .progress {
   height: 100%;
   width: 0%;
-  background: #6a4bc3;
-  transition: width 0.3s;
+  background: linear-gradient(90deg, #6a4bc3, #9b6ef2);
+  border-radius: 8px;
+  transition: width 0.5s ease-in-out;
 }
 .honeypot { display: none; }
+
+/* Canvas do confete 3D colorido */
+#confetti-canvas {
+  position: fixed;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
 </style>
 </head>
 
@@ -96,7 +111,7 @@ button {
     <button type="button" class="retry" onclick="resetar()">🔄 Refazer</button>
   </div>
 
-  <div class="progress-bar hidden">
+  <div class="progress-bar">
     <div class="progress" id="progress"></div>
   </div>
 </form>
@@ -107,6 +122,7 @@ button {
   Sua foto já pode aparecer na TV!
 </div>
 
+<canvas id="confetti-canvas"></canvas>
 </div>
 
 <script>
@@ -127,22 +143,17 @@ startButton.onclick = () => {
   cameraChoice.classList.remove("hidden");
 };
 
-// Abrir câmera (mantém escolha visível até arquivo ser selecionado)
+// Abrir câmera
 function abrirCamera(facingMode) {
   file.setAttribute("capture", facingMode);
   file.click();
 }
 
-// Arquivo selecionado OU cancelado
+// Arquivo selecionado
 file.onchange = () => {
   const f = file.files[0];
+  if (!f) return; // cancelou
 
-  // Cancelou → mantém a tela de escolha visível
-  if (!f) {
-    return;
-  }
-
-  // Esconde escolha da câmera e mostra formulário
   cameraChoice.classList.add("hidden");
   form.classList.remove("hidden");
 
@@ -154,7 +165,6 @@ file.onchange = () => {
 
   preview.innerHTML = "";
   let media;
-
   if (f.type.startsWith("image")) {
     media = document.createElement("img");
     media.src = URL.createObjectURL(f);
@@ -179,14 +189,78 @@ function resetar() {
   cameraChoice.classList.add("hidden");
   success.classList.add("hidden");
   welcome.classList.remove("hidden");
-  progressBar.classList.add("hidden");
+  progressBar.style.opacity = 0;
   progress.style.width = "0%";
 }
 
-// Envio com progresso
+// Confete 3D colorido
+function startConfetti3D(duration = 4000) {
+  const canvas = document.getElementById("confetti-canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const colors = ["#6a4bc3","#9b6ef2","#ff5252","#ffb74d","#4caf50","#00bcd4","#ffc107","#e91e63"];
+  const confettis = [];
+  for (let i = 0; i < 200; i++) {
+    confettis.push({
+      x: Math.random()*canvas.width,
+      y: Math.random()*canvas.height - canvas.height,
+      z: Math.random()*20 + 5,
+      size: Math.random()*8 + 4,
+      color: colors[Math.floor(Math.random()*colors.length)],
+      tilt: Math.random()*20,
+      tiltAngle: Math.random()*2*Math.PI,
+      tiltSpeed: Math.random()*0.1 + 0.05,
+      speedY: Math.random()*3 + 2,
+      speedX: Math.random()*2 - 1,
+      rotation: Math.random()*2*Math.PI,
+      rotationSpeed: Math.random()*0.2 - 0.1,
+      alpha: Math.random()*0.5 + 0.5
+    });
+  }
+
+  let startTime = Date.now();
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    confettis.forEach(c=>{
+      const perspective = 500/(500+c.z);
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(c.tiltAngle);
+      ctx.rotate(c.rotation);
+      ctx.globalAlpha = c.alpha;
+      ctx.fillStyle = c.color;
+      ctx.fillRect(-c.size/2*perspective, -c.size/4*perspective, c.size*perspective, c.size/2*perspective);
+      ctx.restore();
+    });
+    update();
+    if (Date.now() - startTime < duration) requestAnimationFrame(draw);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+
+  function update() {
+    confettis.forEach(c=>{
+      c.tiltAngle += c.tiltSpeed;
+      c.rotation += c.rotationSpeed;
+      c.y += c.speedY;
+      c.x += c.speedX;
+      c.z -= 0.05;
+      if(c.y>canvas.height || c.x<0 || c.x>canvas.width || c.z<0){
+        c.x = Math.random()*canvas.width;
+        c.y = -10;
+        c.z = Math.random()*20 + 5;
+        c.alpha = Math.random()*0.5+0.5;
+      }
+    });
+  }
+
+  draw();
+}
+
+// Envio com progresso suave e confete 3D colorido
 form.onsubmit = (e) => {
   e.preventDefault();
-
   if (form.querySelector('input[name="_honey"]').value) return;
 
   const xhr = new XMLHttpRequest();
@@ -194,19 +268,27 @@ form.onsubmit = (e) => {
 
   xhr.upload.onprogress = (e) => {
     if (e.lengthComputable) {
-      progressBar.classList.remove("hidden");
-      progress.style.width = (e.loaded / e.total) * 100 + "%";
+      progressBar.style.opacity = 1;
+      let percent = (e.loaded / e.total) * 100;
+      progress.style.width = percent + "%";
     }
   };
 
   xhr.onload = () => {
-    form.classList.add("hidden");
-    success.classList.remove("hidden");
-
+    progress.style.width = "100%";
     setTimeout(() => {
-      resetar();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 2000);
+      progressBar.style.opacity = 0;
+      form.classList.add("hidden");
+      success.classList.remove("hidden");
+
+      // Confete 3D colorido
+      startConfetti3D();
+
+      setTimeout(() => {
+        resetar();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }, 2000);
+    }, 500);
   };
 
   xhr.send(new FormData(form));
